@@ -1,9 +1,12 @@
 ---
-zookeeper_filename: "zookeeper-{{ zookeeper.version }}"
+zookeeper_version: 3.4.6
+zookeeper_port: '2181'
+
+zookeeper_filename: "zookeeper-{{ zookeeper_version }}"
 zookeeper_filename_extension: .tar.gz
 
 zookeeper_path: /opt/zookeeper
 zookeeper_user: zookeeper
 zookeeper_var_path: /var/zookeeper
 
-zookeeper_discover_url: http://www.apache.org/dyn/closer.cgi/zookeeper
+zookeeper_url: https://archive.apache.org/dist/zookeeper

@@ -7,10 +7,11 @@
 - name: Get installed version
   shell: readlink -f {{ zookeeper_path }} | sed -nr 's/.*zookeeper\-(.*)/\1/p'
   when: installed_status.stdout == "yes"
+  changed_when: false
   register: installed_version
 
 - name: Set installed variable
-  set_fact: is_installed='{{ installed_status.stdout == "yes" and installed_version.stdout == zookeeper.version }}'
+  set_fact: is_installed='{{ installed_status.stdout == "yes" and installed_version.stdout == zookeeper_version }}'
 
 - name: Add dependencies repository
   apt_repository: repo='ppa:webupd8team/java' update_cache=yes
@@ -28,17 +29,8 @@
 - name: Create User
   user: name={{ zookeeper_user }} system=yes shell=/bin/bash
 
-- name: Discover the closest mirror for Apache ZooKeeper
-  shell: curl -s {{ zookeeper_discover_url }} | sed -n '/id="http"/,/id="backup"/p' | sed -nr 's/.*href=\"(.*)\".*/\1/p' | sed -n 2p
-  register: zookeeper_mirror_url
-  when: not is_installed
-
-- name: Set source url
-  set_fact: zookeeper_source="{{ zookeeper_mirror_url.stdout }}/{{zookeeper_filename}}/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}"
-  when: not is_installed
-
 - name: Download
-  get_url: url={{ zookeeper_source }} dest=/tmp
+  get_url: url="{{ zookeeper_url }}/{{ zookeeper_filename }}/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}" dest="/tmp/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}"
   when: not is_installed
 
 - name: Unarchive
@@ -53,6 +45,7 @@
     path=/opt/{{ zookeeper_filename }}
     owner={{ zookeeper_user }}
     recurse=yes
+  changed_when: false
 
 - name: Link folder
   file: >
@@ -79,7 +72,7 @@
     replace="{{ item.replace }}"
   with_items:
     - { regexp: '^(dataDir=).*', replace: '\1{{ zookeeper_var_path }}/data'}
-    - { regexp: '^(clientPort).*', replace: '\1={{ zookeeper.port }}'}
+    - { regexp: '^(clientPort).*', replace: '\1={{ zookeeper_port }}'}
   when: not is_installed
 
 - name: Set path into script file
@@ -104,6 +97,7 @@
   with_items:
     - "{{ zookeeper_var_path }}"
     - "/var/log/zookeeper"
+  changed_when: false
 
 - name: Set start script
   template: >

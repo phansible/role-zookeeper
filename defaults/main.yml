@@ -1,8 +1,8 @@
 ---
-zookeeper_version: 3.4.6
+zookeeper_version: 3.9.6
 zookeeper_port: '2181'
 
-zookeeper_filename: "zookeeper-{{ zookeeper_version }}"
+zookeeper_filename: "apache-zookeeper-{{ zookeeper_version }}-bin"
 zookeeper_filename_extension: .tar.gz
 
 zookeeper_path: /opt/zookeeper

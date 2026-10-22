@@ -1,6 +1,6 @@
 # Phansible Role: ZooKeeper
 
-[![Build Status](https://travis-ci.org/phansible/role-zookeeper.svg?branch=master)](https://travis-ci.org/phansible/role-zookeeper)
+[![CI](https://github.com/phansible/role-zookeeper/actions/workflows/ci.yml/badge.svg)](https://github.com/phansible/role-zookeeper/actions/workflows/ci.yml)
 
 An Ansible Role that installs [ZooKeeper](https://zookeeper.apache.org/) on Ubuntu specifically created with [Phansible](http://phansible.com/) in mind.
 

@@ -1,137 +1,85 @@
 ---
-- name: Check installation
-  shell: 'test -f {{ zookeeper_path }}/bin/zkServer.sh && echo "yes" || echo "no"'
-  changed_when: false
-  register: installed_status
-
-- name: Get installed version
-  shell: readlink -f {{ zookeeper_path }} | sed -nr 's/.*zookeeper\-(.*)/\1/p'
-  when: installed_status.stdout == "yes"
-  changed_when: false
-  register: installed_version
-
-- name: Set installed variable
-  set_fact: is_installed='{{ installed_status.stdout == "yes" and installed_version.stdout == zookeeper_version }}'
-
-- name: Add dependencies repository
-  apt_repository: repo='ppa:webupd8team/java' update_cache=yes
-
-- name: Set dependencies License
-  shell: echo debconf shared/accepted-oracle-license-v1-1 select true | sudo debconf-set-selections
-  changed_when: false
-
-- name: Install Dependencies
-  apt: pkg={{ item }} state=latest
-  with_items:
-    - oracle-java8-installer
-    - make
+- name: Install dependencies
+  become: yes
+  apt:
+    pkg: [ca-certificates, default-jre-headless, libzookeeper-mt-dev]
+    update_cache: yes
+    cache_valid_time: 3600
 
 - name: Create User
-  user: name={{ zookeeper_user }} system=yes shell=/bin/bash
+  become: yes
+  user: name="{{ zookeeper_user }}" system=yes shell=/bin/bash
+
+- name: Check installation
+  stat: path="/opt/{{ zookeeper_filename }}"
+  register: zookeeper_installed
 
 - name: Download
-  get_url: url="{{ zookeeper_url }}/{{ zookeeper_filename }}/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}" dest="/tmp/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}"
-  when: not is_installed
+  become: yes
+  get_url:
+    url: "{{ zookeeper_url }}/zookeeper-{{ zookeeper_version }}/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}"
+    dest: "/tmp/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}"
+    checksum: "sha512:{{ zookeeper_url }}/zookeeper-{{ zookeeper_version }}/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}.sha512"
+  when: not zookeeper_installed.stat.exists
 
 - name: Unarchive
-  unarchive: >
-    src=/tmp/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}
-    dest=/opt
-    copy=no
-  when: not is_installed
-
-- name: Apply permissions into unarchived file
-  file: >
-    path=/opt/{{ zookeeper_filename }}
-    owner={{ zookeeper_user }}
-    recurse=yes
-  changed_when: false
-
-- name: Link folder
-  file: >
-    src=/opt/{{ zookeeper_filename }}
-    dest={{ zookeeper_path }}
-    owner={{ zookeeper_user }}
-    state=link
-
-- name: Create /var folders
-  file: path={{ item }} state=directory
-  with_items:
-    - "{{ zookeeper_var_path }}"
-    - "{{ zookeeper_var_path }}/data"
-    - "/var/log/zookeeper"
-
-- name: Create config file
-  command: "cp {{ zookeeper_path }}/conf/zoo_sample.cfg {{ zookeeper_var_path }}/zoo.cfg"
-  when: not is_installed
-
-- name: Set config file parameters
-  replace: >
-    dest="{{ zookeeper_var_path }}/zoo.cfg"
-    regexp="{{ item.regexp }}"
-    replace="{{ item.replace }}"
-  with_items:
-    - { regexp: '^(dataDir=).*', replace: '\1{{ zookeeper_var_path }}/data'}
-    - { regexp: '^(clientPort).*', replace: '\1={{ zookeeper_port }}'}
-  when: not is_installed
-
-- name: Set path into script file
-  lineinfile: >
-    dest={{ zookeeper_path }}/bin/zkServer.sh
-    regexp="^ZOOBIN="
-    line='ZOOBIN="{{ zookeeper_path }}/bin"'
-
-- name: Set config path into script file
-  lineinfile: >
-    dest="{{ zookeeper_path }}/bin/zkServer.sh"
-    insertafter="^ZOOBINDIR=.*"
-    line='ZOOCFGDIR="{{ zookeeper_var_path }}"'
-
-- name: Apply permission into /var/solr
-  file: >
-    path={{ item }}
-    owner={{ zookeeper_user }}
-    group={{ zookeeper_user }}
-    state=directory
-    recurse=yes
-  with_items:
-    - "{{ zookeeper_var_path }}"
-    - "/var/log/zookeeper"
-  changed_when: false
-
-- name: Set start script
-  template: >
-    src=init.tpl
-    dest=/etc/init.d/zookeeper
-    owner=root
-    group=root
-    mode=0744
-
-- name: Register service
-  service: name=zookeeper enabled=yes
-
-- name: Flush handlers to apply config changes
-  meta: flush_handlers
-
-- name: Ensure ZooKeeper is started
-  service: name=zookeeper state=started
+  become: yes
+  unarchive:
+    src: "/tmp/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}"
+    dest: /opt
+    remote_src: yes
+  when: not zookeeper_installed.stat.exists
 
 - name: Remove tmp files
-  file: path=/tmp/{{ zookeeper_filename }}{{ zookeeper_filename_extension }} state=absent
+  become: yes
+  file: path="/tmp/{{ zookeeper_filename }}{{ zookeeper_filename_extension }}" state=absent
 
-- name: Check library
-  shell: 'test -f /usr/local/include/zookeeper/zookeeper.h && echo "yes" || echo "no"'
-  changed_when: false
-  register: library_status
+- name: Apply permissions into unarchived file
+  become: yes
+  file: path="/opt/{{ zookeeper_filename }}" owner="{{ zookeeper_user }}" recurse=yes
 
-- name: Configure library
-  command: ./configure chdir={{ zookeeper_path }}/src/c
-  when: library_status.stdout == "no"
+- name: Link folder
+  become: yes
+  file: src="/opt/{{ zookeeper_filename }}" dest="{{ zookeeper_path }}" state=link
+  notify: restart zookeeper
 
-- name: Build library
-  command: make chdir={{ zookeeper_path }}/src/c
-  when: library_status.stdout == "no"
+- name: Create /var folders
+  become: yes
+  file: path="{{ item }}" owner="{{ zookeeper_user }}" group="{{ zookeeper_user }}" state=directory
+  loop:
+    - "{{ zookeeper_var_path }}"
+    - "{{ zookeeper_var_path }}/data"
+    - /var/log/zookeeper
 
-- name: Install library
-  command: make install chdir={{ zookeeper_path }}/src/c
-  when: library_status.stdout == "no"
+- name: Create config files
+  become: yes
+  copy:
+    src: "{{ zookeeper_path }}/conf/{{ item.src }}"
+    dest: "{{ zookeeper_var_path }}/{{ item.dest }}"
+    remote_src: yes
+    force: no
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_user }}"
+  loop:
+    - { src: zoo_sample.cfg, dest: zoo.cfg }
+    - { src: logback.xml, dest: logback.xml }
+
+- name: Set config file parameters
+  become: yes
+  lineinfile:
+    path: "{{ zookeeper_var_path }}/zoo.cfg"
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: dataDir, value: "{{ zookeeper_var_path }}/data" }
+    - { key: clientPort, value: "{{ zookeeper_port }}" }
+  notify: restart zookeeper
+
+- name: Install systemd unit
+  become: yes
+  template: src=zookeeper.service.j2 dest=/etc/systemd/system/zookeeper.service mode=0644
+  notify: restart zookeeper
+
+- name: Ensure ZooKeeper is started and enabled
+  become: yes
+  systemd: name=zookeeper state=started enabled=yes daemon_reload=yes

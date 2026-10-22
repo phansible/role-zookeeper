@@ -1,0 +1,14 @@
+[Unit]
+Description=Apache ZooKeeper
+After=network.target
+
+[Service]
+Type=simple
+User={{ zookeeper_user }}
+Environment=ZOOCFGDIR={{ zookeeper_var_path }}
+Environment=ZOO_LOG_DIR=/var/log/zookeeper
+ExecStart={{ zookeeper_path }}/bin/zkServer.sh start-foreground
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
